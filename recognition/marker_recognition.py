@@ -1,72 +1,65 @@
-import cv2 as cv
+import cv2
 import numpy as np
 
-# Load images
-img = cv.imread('./markers/test_images/img1.jpeg',)
-img_gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
+# Load image
+img = cv2.imread('./markers/test_images/img4.jpeg')
+img_area = img.shape[0] * img.shape[1]
+area_threshold = 0.0015 * img_area
 
-markers = ['./markers/artoolkit/marker1.png', './markers/artoolkit/marker2.png', './markers/artoolkit/marker3.png', './markers/artoolkit/marker4.png', './markers/artoolkit/marker5.png']
-markers = [cv.imread(marker,cv.IMREAD_GRAYSCALE) for marker in markers]
 
-# Define corners of the marker
-marker_corners = np.array([[0, 0], [0, markers[0].shape[0]], [markers[0].shape[1], markers[0].shape[0]], [markers[0].shape[1], 0]], dtype=np.float32)
+# Convert to grayscale
+gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-# Create SIFT object
-sift = cv.SIFT_create()
+# Thresholding
+_, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
 
-# List to store keypoints and descriptors for each marker
-markers_kp_des = []
-
-for marker in markers:
-    kp, des = sift.detectAndCompute(marker, None)
-    markers_kp_des.append((kp, des))
-
-# Apply thresholding gaussian blur
-img_thresh = cv.adaptiveThreshold(img_gray, 200, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, 55, 2)
-
-# Connected components (Blob) detection
-num_labels, labels = cv.connectedComponents(img_thresh)
-labels = ((labels / num_labels) * 255).astype(np.uint8) # Normalize the label matrix
-
-# Find contours in the threshold image
-contours, _ = cv.findContours(img_thresh, cv.RETR_TREE, cv.CHAIN_APPROX_SIMPLE)
+# Find contours
+contours, _ = cv2.findContours(thresh, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
 for contour in contours:
-    # Approximate the contour
-    epsilon = 0.01 * cv.arcLength(contour, True)
-    approx = cv.approxPolyDP(contour, epsilon, True)
+    area = cv2.contourArea(contour)
+    approx = cv2.approxPolyDP(contour, 0.01 * cv2.arcLength(contour, True), True)
+    if len(approx) == 4 and cv2.isContourConvex(approx) and area > area_threshold:
+        # Get the corners of the marker
+        corners = approx.reshape((4, 2))
+        corners = corners.astype(np.float32)
+        # Draw contours and corners
+        cv2.drawContours(img, [contour], -1, (0, 255, 0), 3)
 
-    # If quad
-    if len(approx) == 4:
-        # Compute contour area
-        area = cv.contourArea(contour)
-        x,y,w,h = cv.boundingRect(contour)
-        roi=img_gray[y:y+h,x:x+w]
+'''
+        # Camera matrix (assuming an identity matrix for simplicity)
+        camera_matrix = np.eye(3)
 
-        if area>10000:
-            # Find the keypoints and descriptors with SIFT
-            kp2, des2 = sift.detectAndCompute(roi, None)
+        # Distortion coefficients (assuming  distortion for simplicity)
+        dist_coeffs = np.zeros((4, 1))
 
-            # create BFMatcher object
-            bf = cv.BFMatcher(cv.NORM_L2, crossCheck=True)
+        # Marker 3D model points (assuming a square marker of side length 1)
+        marker_size = 1.0
+        obj_points = np.array([[0, 0, 0],
+                               [marker_size, 0, 0],
+                               [marker_size, marker_size, 0],
+                               [0, marker_size, 0]], dtype=np.float32)
 
-            for kp1, des1 in markers_kp_des:
-                # Match descriptors.
-                matches = bf.match(des1,des2)
+        
 
-                # Sort them in the order of their distance.
-                matches = sorted(matches, key = lambda x:x.distance)
+        # Solve PnP
+        _, rvec, tvec = cv2.solvePnP(obj_points, corners, camera_matrix, dist_coeffs)
 
-                if len(matches)>4:
-                    # Apply ransac 
-                    src_pts = np.float32([ kp1[m.queryIdx].pt for m in matches ]).reshape(-1,1,2)
-                    dst_pts = np.float32([ kp2[m.trainIdx].pt for m in matches ]).reshape(-1,1,2)
-                    M, mask = cv.findHomography(src_pts, dst_pts, cv.RANSAC,5.0)
+        # Project 3D points to image plane
+        img_points, _ = cv2.projectPoints(np.array([[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.float32),
+                                           rvec, tvec, camera_matrix, dist_coeffs)
 
-                    cv.drawContours(img, [approx], 0, (0, 255, 0),4)
+        # Draw the axis
+        img = cv2.line(img, tuple(corners[0].astype(int)), tuple(img_points[1].ravel().astype(int)), (0, 0, 255), 5)
+        img = cv2.line(img, tuple(corners[0].astype(int)), tuple(img_points[2].ravel().astype(int)), (0, 255, 0), 5)
+        img = cv2.line(img, tuple(corners[0].astype(int)), tuple(img_points[3].ravel().astype(int)), (255, 0, 0), 5)
+'''
 
-# Show the image
-img = cv.resize(img, (0, 0), fx=0.4, fy=0.4)
-cv.imshow('Image', img)
-cv.waitKey(0)
-cv.destroyAllWindows()
+
+# Display image
+img = cv2.resize(img, (0, 0), fx=0.5, fy=0.5)
+cv2.imshow('Image', img)
+cv2.waitKey(0)
+cv2.destroyAllWindows()
+
+# TODO: identify the marker and draw the axis
