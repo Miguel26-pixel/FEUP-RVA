@@ -1,8 +1,10 @@
 import cv2
 import numpy as np
+from imageChange import *
+
 
 # Define constants
-AREA_THRESHOLD = 0.005
+AREA_THRESHOLD = 0.01
 OBJ_POINTS = np.array([[0.5, 0.5, 0], [-0.5, 0.5, 0], [-0.5, -0.5, 0], [0.5, -0.5, 0]], dtype=np.float32)
 DIST_COEFFS = np.zeros(4)
 
@@ -100,6 +102,8 @@ def draw_3d_object(img, rvec, tvec, camera_matrix):
     return img
 
 def process_countours(contours, img,img_gray,marker_size,markers):
+    area_list = {}
+    contour_list = {}
     for contour in contours:
         area = cv2.contourArea(contour)
         approx = cv2.approxPolyDP(contour, 0.01 * cv2.arcLength(contour, True), True)
@@ -110,6 +114,8 @@ def process_countours(contours, img,img_gray,marker_size,markers):
             marker = resize_img(marker,marker_size)
 
             corresponding_marker = match_template(marker, markers)
+            area_list[area] = corresponding_marker
+            contour_list[area] = contour
 
             # if want to display the id of the marker next to the marker
             cv2.putText(img,str(corresponding_marker),(int(corners[0][0]),int(corners[0][1])),cv2.FONT_HERSHEY_SIMPLEX ,5,(255 ,255 ,255),3,cv2.LINE_AA)
@@ -122,7 +128,7 @@ def process_countours(contours, img,img_gray,marker_size,markers):
             # draw cube
             img = draw_3d_object(img,rvec,tvec,camera_matrix)
 
-    return img
+    return img,area_list,contour_list
 
 def display_image(img,resized=False):
     if len(img.shape)==2:
@@ -138,7 +144,7 @@ def main():
 
     # 5,6,7
     # set flip to True if you want to flip the image
-    image = get_image(7,flip=True)
+    image = get_image(5,flip=True)
 
     image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
@@ -154,9 +160,28 @@ def main():
     # get contours
     image_contours = get_contours(image_threshold)
 
-    image = process_countours(image_contours,image,image_gray,marker_size,markers)
+    image,area_list,contour_list = process_countours(image_contours,image,image_gray,marker_size,markers)
 
-    display_image(image,resized=True)
+    max_area = max(area_list.keys())
+
+    max_marker = area_list[max_area]
+
+    print(max_marker)
+
+    max_contour = contour_list[max_area]
+
+    sword_image = cv2.imread('sword_2.png', cv2.IMREAD_UNCHANGED)
+
+    #sword_image = take_background(sword_image)
+
+    rotated_image = rotate_image(sword_image, max_contour)
+
+    rotated_image = rotate_to_vertical(rotated_image)
+
+    final_image = merge_images(rotated_image, image, max_contour)
+
+    display_image(final_image,resized=True)
+
 
 if __name__ == '__main__':
     main()
