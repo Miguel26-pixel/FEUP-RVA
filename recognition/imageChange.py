@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from PIL import Image
 
 
 def rotate_image(image, large_contour):
@@ -35,7 +36,7 @@ def take_background(image):
 
 def merge_images(image1, image2, large_contour):
     # Get the dimensions of image1
-    image1_height, image1_width, _ = image1.shape
+    image1_height, image1_width = image1.shape[:2]
 
     x, y, w, h = cv2.boundingRect(large_contour)
 
@@ -63,14 +64,14 @@ def merge_images(image1, image2, large_contour):
     # Use the alpha channel (if available) to blend image1 with the ROI
     if image1.shape[2] == 4:  # Check if there's an alpha channel
         for c in range(0, 3):
-            image2[y_position:y_position + roi_height, x_position:x_position + roi_width, c] = (
-                image1_resized[:, :, c] + (1 - image1_resized[:, :, 3] / 255.0) * roi[:, :, c]
+            image2[y_position:y_position + image1_height, x_position:x_position + image1_width, c] = (
+                image1[:, :, c] + (1 - image1[:, :, 3] / 255.0)
             )
     else:
         # If there's no alpha channel, simply copy the RGB values
         for c in range(0, 3):
-            image2[y_position:y_position + roi_height, x_position:x_position + roi_width, c] = (
-                image1_resized[:, :, c]
+            image2[y_position:y_position + image1_height, x_position:x_position + image1_width, c] = (
+                image1[:, :, c]
             )
 
     return image2
@@ -84,23 +85,8 @@ def rotate_image_angle(image):
 
 def rotate_to_vertical(image):
 
-    # Detect the text angle using the Hough Line Transform
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    edges = cv2.Canny(gray, 50, 150, apertureSize=3)
-    lines = cv2.HoughLines(edges, 1, np.pi / 180, 100)
-
-    if lines is not None:
-        for rho, theta in lines[0]:
-            angle = np.degrees(theta)
-            if 45 <= angle <= 135:
-                # The image is horizontal, so rotate it 90 degrees clockwise to make it vertical
-                rotated_image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
-                return rotated_image
-
-    # If the image is already vertical, no rotation is needed
-    return image
-
-
+    rotated_image = cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE)
+    return rotated_image
 
 
 

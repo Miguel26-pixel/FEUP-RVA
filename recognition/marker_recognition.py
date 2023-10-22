@@ -101,6 +101,48 @@ def draw_3d_object(img, rvec, tvec, camera_matrix):
     img=cv2.drawContours(img,[imgpts[4:]],-1,(0,255,0),3)
     return img
 
+def draw_3d_pyramid_and_cube(img, rvec, tvec, camera_matrix):
+    cube_vertices = np.float32([[-0.4, 0.4, 0], [0.4, 0.4, 0], [0.4, -0.4, 0], [-0.4, -0.4, 0],
+                                [-1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, -1.0, 1.0], [-1.0, -1.0, 1.0]])
+
+    imgpts, jac = cv2.projectPoints(cube_vertices, rvec, tvec, camera_matrix, DIST_COEFFS)
+    imgpts = np.int32(imgpts).reshape(-1, 2)
+
+
+    cube_edges = [(0, 1), (1, 2), (2, 3), (3, 0), 
+                 (4, 5), (5, 6), (6, 7), (7, 4), 
+                 (0, 4), (1, 5), (2, 6), (3, 7)] 
+
+    for start, end in cube_edges:
+        img = cv2.line(img, tuple(imgpts[start]), tuple(imgpts[end]), (0, 255, 0), 3) 
+
+
+    pyramid_vertices = np.float32([[-0.8, 0.8, 1.0], [0.8, 0.8, 1.0], [0.8, -0.8, 1.0],
+                                  [-0.8, -0.8, 1.0], [0, 0, 3.0]])
+
+    imgpts_pyramid, jac = cv2.projectPoints(pyramid_vertices, rvec, tvec, camera_matrix, DIST_COEFFS)
+    imgpts_pyramid = np.int32(imgpts_pyramid).reshape(-1, 2)
+
+    pyramid_edges = [(0, 1), (1, 2), (2, 3), (3, 0), 
+                    (0, 4), (1, 4), (2, 4), (3, 4)] 
+
+    for start, end in pyramid_edges:
+        img = cv2.line(img, tuple(imgpts_pyramid[start]), tuple(imgpts_pyramid[end]), (0, 0, 255), 3)
+
+    
+    axis=np.float32([[0.5,0.5,0],[0.5,-0.5,0],[-0.5,-0.5,0],[-0.5,0.5,0],[0.5,0.5,-2],[0.5,-0.5,-2],[-0.5,-0.5,-2],[-0.5,0.5,-2]])
+    imgpts,jac=cv2.projectPoints(axis,rvec,tvec,camera_matrix,DIST_COEFFS   )
+    imgpts=np.int32(imgpts).reshape(-1,2)
+    img=cv2.drawContours(img,[imgpts[:4]],-1,(0,255,0),3)
+    for i,j in zip(range(4),range(4,8)):
+        img=cv2.line(img,tuple(imgpts[i]),tuple(imgpts[j]),(0,0,255),3)
+
+    img=cv2.drawContours(img,[imgpts[4:]],-1,(0,255,0),3)
+
+    return img
+
+
+
 def process_countours(contours, img,img_gray,marker_size,markers):
     area_list = {}
     contour_list = {}
@@ -117,10 +159,8 @@ def process_countours(contours, img,img_gray,marker_size,markers):
             area_list[area] = corresponding_marker
             contour_list[area] = contour
 
-            # if want to display the id of the marker next to the marker
             cv2.putText(img,str(corresponding_marker),(int(corners[0][0]),int(corners[0][1])),cv2.FONT_HERSHEY_SIMPLEX ,5,(255 ,255 ,255),3,cv2.LINE_AA)
 
-            # get camera matrix
             camera_matrix = get_camera_matrix(img)
 
             rvec,tvec = get_rvec_tvec(img,corners,camera_matrix)
@@ -129,6 +169,51 @@ def process_countours(contours, img,img_gray,marker_size,markers):
             img = draw_3d_object(img,rvec,tvec,camera_matrix)
 
     return img,area_list,contour_list
+
+def display_sword(area_list, contour_list, image, image_copy):
+
+    max_area = max(area_list.keys())
+
+    max_marker = area_list[max_area]
+
+    print(max_marker)
+
+    max_contour = contour_list[max_area]
+
+    ellipse = cv2.fitEllipse(max_contour)
+    angle = ellipse[2]
+    print("angle: " + str(angle))
+
+    camera_matrix = get_camera_matrix(image)
+
+    approx = cv2.approxPolyDP(max_contour, 0.01 * cv2.arcLength(max_contour, True), True)
+
+    corners = get_corners(approx)
+
+    rvec,tvec = get_rvec_tvec(image_copy,corners,camera_matrix)
+
+    additional_rotation_degrees = 240
+    additional_rotation_radians = np.radians(additional_rotation_degrees)
+
+    if (angle <= 45):
+        additional_rotation_matrix = cv2.Rodrigues(np.array([0, 0, additional_rotation_radians]))[0]
+    elif(angle > 45 and angle < 60):
+        additional_rotation_degrees = 250
+        additional_rotation_radians = np.radians(additional_rotation_degrees)
+        additional_rotation_matrix = cv2.Rodrigues(np.array([0, 0, additional_rotation_radians]))[0]
+    elif (angle > 91):
+        image_copy = draw_3d_pyramid_and_cube(image_copy,rvec,tvec,camera_matrix)
+        return image_copy
+    else:
+        additional_rotation_degrees = 270 - (90-angle)
+        additional_rotation_radians = np.radians(additional_rotation_degrees)
+        additional_rotation_matrix = cv2.Rodrigues(np.array([additional_rotation_radians, 0, 0]))[0]
+
+    rvec = cv2.Rodrigues(np.dot(additional_rotation_matrix, cv2.Rodrigues(rvec)[0]))[0]
+
+    image_copy = draw_3d_pyramid_and_cube(image_copy,rvec,tvec,camera_matrix)
+
+    return image_copy
 
 def display_image(img,resized=False):
     if len(img.shape)==2:
@@ -141,46 +226,27 @@ def display_image(img,resized=False):
     cv2.destroyAllWindows()
 
 def main():
-
+    image_number = input("file number 2/3/4/5/6/7 \n")
     # 5,6,7
     # set flip to True if you want to flip the image
-    image = get_image(5,flip=True)
+    image = get_image(image_number,flip=True)
+    image_copy = get_image(image_number,flip=True)
 
     image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-    # load markers dictionary
     markers = get_markers()
 
-    # get marker size
     marker_size = get_marker_size(markers[0])
 
-    # apply threshold to image
     image_threshold = apply_threshold(image_gray)
 
-    # get contours
     image_contours = get_contours(image_threshold)
 
     image,area_list,contour_list = process_countours(image_contours,image,image_gray,marker_size,markers)
 
-    max_area = max(area_list.keys())
+    image_copy = display_sword(area_list, contour_list, image_number, image, image_copy)
 
-    max_marker = area_list[max_area]
-
-    print(max_marker)
-
-    max_contour = contour_list[max_area]
-
-    sword_image = cv2.imread('sword_2.png', cv2.IMREAD_UNCHANGED)
-
-    #sword_image = take_background(sword_image)
-
-    rotated_image = rotate_image(sword_image, max_contour)
-
-    rotated_image = rotate_to_vertical(rotated_image)
-
-    final_image = merge_images(rotated_image, image, max_contour)
-
-    display_image(final_image,resized=True)
+    display_image(image_copy,resized=True)
 
 
 if __name__ == '__main__':
