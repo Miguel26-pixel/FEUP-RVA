@@ -240,8 +240,7 @@ def display_image(img,resized=False):
 
 def main():
     image_number = input("file number 2/3/4/5/6/7 \n")
-    # 5,6,7
-    # set flip to True if you want to flip the image
+
     image = get_image(image_number,flip=True)
     image_copy = get_image(image_number,flip=True)
 
