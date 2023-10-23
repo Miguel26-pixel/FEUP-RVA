@@ -41,8 +41,11 @@ def get_markers():
 def get_marker_size(marker):
     return marker.shape[0]
 
-def apply_threshold(img):
-    _, thresh = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+def apply_threshold(img,inv=True):
+    if inv:
+        _, thresh = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    else:
+        _, thresh = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
     return thresh
 
 def get_contours(img):
@@ -78,6 +81,12 @@ def match_template(marker, markers):
             res = cv2.matchTemplate(marker, x, cv2.TM_CCORR_NORMED)
             vals.append(res.max())
             marker = cv2.rotate(marker,cv2.ROTATE_90_CLOCKWISE)
+
+            # comparison
+            #cv2.imshow('Marker',marker)
+            #cv2.imshow('Template',x)
+            #cv2.waitKey(0)
+            #cv2.destroyAllWindows()
 
         best_of_each_marker.append(max(vals))
 
@@ -152,8 +161,11 @@ def process_countours(contours, img,img_gray,marker_size,markers):
         if len(approx) == 4 and cv2.isContourConvex(approx) and area > calculate_area_threshold(img):
             corners = get_corners(approx)
             marker = apply_perspective_transform(img_gray,corners,marker_size)
-            marker = apply_threshold(marker)
+            marker = apply_threshold(marker,inv=False)
             marker = resize_img(marker,marker_size)
+
+            #marker roi
+            #display_image(marker)
 
             corresponding_marker = match_template(marker, markers)
             area_list[area] = corresponding_marker
@@ -235,11 +247,17 @@ def main():
 
     image_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
+    #grayscale image
+    #display_image(image_gray,resized=True)
+
     markers = get_markers()
 
     marker_size = get_marker_size(markers[0])
 
     image_threshold = apply_threshold(image_gray)
+    
+    #thresholded image
+    #display_image(image_threshold,resized=True)
 
     image_contours = get_contours(image_threshold)
 
