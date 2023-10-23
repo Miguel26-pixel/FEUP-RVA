@@ -222,6 +222,7 @@ def display_image(img,resized=False):
     if resized:
         img=cv2.resize(img,(0 ,0),fx=0.25,fy=0.25)
     cv2.imshow('Image',img)
+    cv2.imwrite('new_image.jpg', img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -244,7 +245,7 @@ def main():
 
     image,area_list,contour_list = process_countours(image_contours,image,image_gray,marker_size,markers)
 
-    image_copy = display_sword(area_list, contour_list, image_number, image, image_copy)
+    image_copy = display_sword(area_list, contour_list, image, image_copy)
 
     display_image(image_copy,resized=True)
 
